@@ -64,6 +64,7 @@ input::placeholder{color:var(--faint);font-weight:400}
 .send:hover{opacity:.9}
 .spacer{display:none}.send:focus-visible{outline:2px solid var(--red);outline-offset:2px}
 .send[disabled]{background:var(--rail);color:var(--faint);cursor:default}
+.barra{display:block}
 .ft{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);font-size:13px;
  color:var(--mute);line-height:1.6}
 .ft b{color:var(--ink);font-weight:600}
@@ -83,8 +84,10 @@ input::placeholder{color:var(--faint);font-weight:400}
  .lo{display:none} .sm{display:inline}
  .d{font-size:14.5px} .d em{margin-left:5px;font-size:11.5px}
  .ac{font-size:13.5px}
- .send{position:fixed;left:12px;right:12px;bottom:12px;width:auto;z-index:9;
-  padding:16px;font-size:16px;box-shadow:0 6px 20px rgba(0,0,0,.28)}
+ .barra{position:fixed;left:0;right:0;bottom:0;z-index:9;background:var(--ground);
+  border-top:1px solid var(--line);padding:10px 12px calc(10px + env(safe-area-inset-bottom));
+  box-shadow:0 -6px 20px rgba(0,0,0,.14)}
+ .send{margin-top:0;padding:16px;font-size:16px}
  .spacer{display:block;height:8px}
  h2{font-size:21px} .hint{font-size:13px}
  .ft{font-size:12.5px}
@@ -125,7 +128,7 @@ depois que a mensagem for enviada.</p>
   <div class="hd"><span>Dia</span><span>Treinados</span><span><i class="lo">Acumulado</i><i class="sm">Acum.</i></span></div>
   <div id="lista"></div>
 </div>
-<button class="send" id="send" disabled>Preencha ao menos um dia</button>
+<div class="barra"><button class="send" id="send" disabled>Preencha ao menos um dia</button></div>
 
 <div class="spacer"></div>
 <div class="ft">
