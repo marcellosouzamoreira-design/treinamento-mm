@@ -53,7 +53,7 @@ input.naoenviado{border-color:var(--red);border-width:2px}
 .atraso{margin-top:12px;padding:9px 12px;background:var(--rail);border-left:3px solid var(--red);
  font-size:12.5px;color:var(--ink)}
 .rows{display:flex;flex-direction:column;gap:1px;background:var(--line);border:1px solid var(--line)}
-.hd,.r{display:grid;grid-template-columns:1fr 92px 76px;gap:10px;align-items:center;
+.hd,.r{display:grid;grid-template-columns:1fr 92px 104px;gap:10px;align-items:center;
  background:var(--surf);padding:11px 14px}
 .hd{background:var(--navy);color:#fff;padding:9px 14px}
 .hd span{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;font-weight:600}
@@ -91,7 +91,7 @@ input::placeholder{color:var(--faint);font-weight:400}
  .st{grid-template-columns:1fr 1fr;margin-top:16px}
  .st .s:last-child{grid-column:1/-1}
  .s{padding:11px 12px} .s .v{font-size:19px} .s .l{font-size:10px;letter-spacing:.06em}
- .hd,.r{grid-template-columns:1fr 96px 70px;gap:8px;padding:8px 10px}
+ .hd,.r{grid-template-columns:1fr 96px 74px;gap:8px;padding:8px 10px}
  .hd{padding:8px 10px} .hd span{font-size:9.5px;letter-spacing:.05em}
  .lo{display:none} .sm{display:inline}
  .d{font-size:14.5px} .d em{margin-left:5px;font-size:11.5px}
@@ -216,6 +216,8 @@ function carregar(){
     try{ localStorage.setItem(K_SERV, JSON.stringify(x.dados)); }catch(e){}
     document.getElementById('stamp').textContent=x.dados.atualizado||'ainda não preenchido';
     montar(); carregou=true; render();
+    diz(GH.token ? 'Salva sozinho. Todo mundo que abrir o link vê o mesmo número.'
+                 : 'Somente leitura — chave de escrita não configurada.', GH.token?'ok':'');
     conferirRascunho();
     return x;
   });
