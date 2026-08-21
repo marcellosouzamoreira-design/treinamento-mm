@@ -45,6 +45,13 @@ h2{font-family:"Crimson Text",Georgia,serif;font-weight:600;font-size:23px;color
 .estado.ok{border-color:var(--good);color:var(--good)}
 .estado.salvando{border-color:var(--navy2);color:var(--navy2)}
 .estado.erro{border-color:var(--red);color:var(--red)}
+.reenviar{display:block;width:100%;margin:0 0 14px;padding:12px;border:1px solid var(--navy);
+ background:transparent;color:var(--navy);font:600 15px Inter,sans-serif;border-radius:2px;cursor:pointer}
+.reenviar:hover{background:var(--rail)}
+.reenviar:focus-visible{outline:2px solid var(--red);outline-offset:2px}
+input.naoenviado{border-color:var(--red);border-width:2px}
+.atraso{margin-top:12px;padding:9px 12px;background:var(--rail);border-left:3px solid var(--red);
+ font-size:12.5px;color:var(--ink)}
 .rows{display:flex;flex-direction:column;gap:1px;background:var(--line);border:1px solid var(--line)}
 .hd,.r{display:grid;grid-template-columns:1fr 92px 76px;gap:10px;align-items:center;
  background:var(--surf);padding:11px 14px}
@@ -117,14 +124,16 @@ input::placeholder{color:var(--faint);font-weight:400}
   <div class="lg"><span id="pct">0% da meta</span><span>2.500</span></div>
   <div class="st">
     <div class="s"><div class="v" id="falta">2.500</div><div class="l">Ainda faltam</div></div>
-    <div class="s"><div class="v" id="ritmo">250</div><div class="l">Por dia<br>no ritmo restante</div></div>
+    <div class="s"><div class="v" id="ritmo">250</div><div class="l" id="ritmol">Por dia útil<br>nos que faltam</div></div>
     <div class="s"><div class="v" id="dlt">—</div><div class="l" id="dltl">Contra o ritmo de referência</div></div>
   </div>
+  <div id="atraso" class="atraso" style="display:none"></div>
   <div class="stamp">Números oficiais atualizados em <b id="stamp">—</b></div>
 </div>
 
 <h2>Registro diário</h2>
 <div id="estado" class="estado">Carregando…</div>
+<button id="reenviar" class="reenviar" style="display:none">Reenviar</button>
 <p class="hint">Preencha os dias e toque em <b>enviar</b> — abre o WhatsApp com o resumo
 pronto. Não precisa de conta nem de senha.</p>
 
@@ -136,143 +145,316 @@ pronto. Não precisa de conta nem de senha.</p>
 
 <div class="spacer"></div>
 <div class="ft">
-  <b>Ritmo de referência:</b> 2.500 em 10 dias = 250 por dia. Sábado e domingo entram
-  na contagem mas não carregam meta.<br>
+  <b>Ritmo de referência:</b> 2.500 distribuídos pelos <b>8 dias úteis</b> = 313 por dia. Sábado e
+  domingo entram na contagem mas não carregam meta — turma de fim de semana conta a favor.<br>
   <b>Por que 28/08:</b> o recebimento de pastas abre em 25/08 e as vendas em 18/09 —
   corretor treinado depois disso chega atrasado para a fila.
 </div>
 </div>
 
 <script>
-/* ---- configuração ---- */
+/* ================= estado ================= */
 var GH = { owner:"marcellosouzamoreira-design", repo:"treinamento-mm", path:"dados.json", token:['Z2l0aHViX3BhdF8xMUI3M0JQSUkwZzIyUUhzODB0','REU2X0ZUVnhyNGNpRmlCZkFtSzNSdzFqQ1RnUU1T','UkRtZ0ZlZVE0TFVFcDBEbFdURzZLTUVXNDVhQVV2UXhD'].map(function(x){return atob(x)}).join("") };
-var LS = "treinamento-mm-v1";
+var API = 'https://api.github.com/repos/'+GH.owner+'/'+GH.repo+'/contents/'+GH.path;
+var K_RASC='tmm-rascunho-v2', K_SERV='tmm-servidor-v2', ANO=2026;
 
-var META=2500, REF=250, nf=new Intl.NumberFormat('pt-BR'), DIAS=[], SHA=null, timer=null;
+var DIAS=[], META=2500, SHA=null, carregou=false;
+var enviando=false, pedidoPendente=false, timer=null, tentativas=0;
+var nf=new Intl.NumberFormat('pt-BR');
 var est=document.getElementById('estado');
-function diz(t,c){ est.textContent=t; est.className='estado'+(c?' '+c:''); }
 
-/* ---- carregar ---- */
-function carregar(){
-  var u='https://api.github.com/repos/'+GH.owner+'/'+GH.repo+'/contents/'+GH.path;
-  var h={'Accept':'application/vnd.github+json'};
+function diz(t,c){ est.textContent=t; est.className='estado'+(c?' '+c:''); }
+function H(extra){ var h={'Accept':'application/vnd.github+json'};
   if(GH.token) h.Authorization='Bearer '+GH.token;
-  return fetch(u+'?ref=main&t='+Date.now(),{headers:h,cache:'no-store'})
+  if(extra) for(var k in extra) h[k]=extra[k]; return h; }
+
+/* ========= leitura única de campo: só dígitos, nunca negativo ========= */
+function ler(el){
+  var s=String(el.value==null?'':el.value).replace(/[^0-9]/g,'');
+  if(s==='') return null;
+  var n=parseInt(s,10);
+  if(isNaN(n)) return null;
+  return Math.min(n,99999);
+}
+function valores(){ return [].slice.call(document.querySelectorAll('input')).map(ler); }
+
+/* ========= calendário: hoje vem do relógio, não do preenchimento ========= */
+function dataDe(i){ var p=DIAS[i].data.split('/'); return new Date(ANO,+p[1]-1,+p[0]); }
+function idxHoje(){
+  var h=new Date(); h.setHours(0,0,0,0);
+  var n=0;
+  for(var i=0;i<DIAS.length;i++){ if(dataDe(i)<=h) n=i+1; }
+  return n; // 0 = antes do início · DIAS.length = no fim ou depois
+}
+var UTEIS=0, REFDIA=0;
+function recalcRef(){
+  UTEIS=DIAS.filter(function(x){return !x.fim}).length || DIAS.length;
+  REFDIA=META/UTEIS;
+}
+function refAte(idx){ var c=0; for(var i=0;i<idx && i<DIAS.length;i++) if(!DIAS[i].fim) c++; return Math.round(c*REFDIA); }
+
+/* ================= rascunho local ================= */
+function salvarRascunho(){
+  try{ localStorage.setItem(K_RASC, JSON.stringify({v:valores(), quando:Date.now()})); }catch(e){}
+}
+function limparRascunho(){ try{ localStorage.removeItem(K_RASC); }catch(e){} }
+function lerRascunho(){ try{ return JSON.parse(localStorage.getItem(K_RASC)||'null'); }catch(e){ return null; } }
+function lerServidorLocal(){ try{ return JSON.parse(localStorage.getItem(K_SERV)||'null'); }catch(e){ return null; } }
+
+/* ================= carga ================= */
+function buscar(){
+  return fetch(API+'?ref=main&t='+Date.now(),{headers:H(),cache:'no-store'})
     .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
     .then(function(j){
-      SHA=j.sha;
-      var d=JSON.parse(decodeURIComponent(escape(atob(j.content.replace(/\n/g,'')))));
-      DIAS=d.dias; META=d.meta||2500;
-      document.getElementById('stamp').textContent=d.atualizado||'ainda não preenchido';
-      montar(); render();
-      diz(GH.token ? 'Salva sozinho. Todo mundo que abrir o link vê o mesmo número.'
-                   : 'Somente leitura — a chave de escrita ainda não foi configurada.',
-          GH.token?'ok':'');
+      return { sha:j.sha, dados: JSON.parse(decodeURIComponent(escape(atob(j.content.replace(/\n/g,''))))) };
     });
 }
 
-function localSalvo(){ try{ return JSON.parse(localStorage.getItem(LS)||'null'); }catch(e){ return null; } }
+function carregar(){
+  return buscar().then(function(x){
+    SHA=x.sha; DIAS=x.dados.dias; META=x.dados.meta||2500; recalcRef();
+    try{ localStorage.setItem(K_SERV, JSON.stringify(x.dados)); }catch(e){}
+    document.getElementById('stamp').textContent=x.dados.atualizado||'ainda não preenchido';
+    montar(); carregou=true; render();
+    conferirRascunho();
+    return x;
+  });
+}
 
-carregar().catch(function(){
-  var c=localSalvo();
-  if(c){ DIAS=c.dias; META=c.meta||2500;
-    document.getElementById('stamp').textContent=c.atualizado||'—';
-    montar(); render(); diz('Sem conexão com o servidor — mostrando o último estado deste aparelho.','erro'); }
-  else diz('Não consegui carregar os dados. Recarregue a página.','erro');
-});
+/* rascunho que o servidor não tem → nunca descartar em silêncio */
+function conferirRascunho(){
+  var r=lerRascunho(); if(!r||!r.v) return;
+  var ins=[].slice.call(document.querySelectorAll('input'));
+  var faltando=[];
+  r.v.forEach(function(v,i){
+    if(v!=null && (!DIAS[i] || DIAS[i].n==null || DIAS[i].n!==v)){
+      if(ins[i]){ ins[i].value=v; ins[i].classList.add('naoenviado'); faltando.push(DIAS[i].data); }
+    }
+  });
+  if(faltando.length){
+    render();
+    diz('Estes dias ainda não foram enviados: '+faltando.join(', ')+'. Toque em Reenviar.','erro');
+    document.getElementById('reenviar').style.display='block';
+  } else limparRascunho();
+}
 
-/* ---- montar ---- */
+/* ================= gravação ================= */
+function agendarSalvar(){
+  salvarRascunho();
+  if(!GH.token){ diz('Somente leitura — chave de escrita não configurada.',''); return; }
+  clearTimeout(timer); tentativas=0;
+  diz('Salvando…','salvando');
+  timer=setTimeout(pedirSalvar,1200);
+}
+
+function pedirSalvar(){
+  clearTimeout(timer);
+  if(enviando){ pedidoPendente=true; return; }
+  gravar();
+}
+
+function corpoAtual(){
+  var v=valores();
+  DIAS.forEach(function(x,i){ x.n=v[i]; });
+  var a=new Date();
+  var carimbo=a.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})+' às '+
+              a.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  return {meta:META, atualizado:carimbo, dias:DIAS.map(function(x){return {data:x.data,sem:x.sem,fim:x.fim,n:x.n}})};
+}
+
+function gravar(keepalive){
+  if(!carregou){ diz('Ainda não carreguei os dados do servidor. Toque em Recarregar.','erro');
+                 document.getElementById('reenviar').style.display='block'; return; }
+  enviando=true; pedidoPendente=false;
+  var corpo=corpoAtual();
+  var enviado=corpo.dias.map(function(x){return x.n});
+
+  var passo = SHA ? Promise.resolve(SHA)
+                  : buscar().then(function(x){ SHA=x.sha; return SHA; });
+
+  passo.then(function(sha){
+    var b64=btoa(unescape(encodeURIComponent(JSON.stringify(corpo,null,2))));
+    var opts={ method:'PUT', headers:H({'Content-Type':'application/json'}),
+      body:JSON.stringify({message:'Treinamento — atualização de '+corpo.atualizado,
+                           content:b64, sha:sha, branch:'main'}) };
+    if(keepalive) opts.keepalive=true;
+    return fetch(API,opts);
+  }).then(function(r){
+    if(r.status===409||r.status===422){
+      /* conflito: NUNCA remontar a tela. Pega sha novo, mescla, tenta de novo. */
+      enviando=false;
+      if(++tentativas>3){ falhou('conflito repetido'); return; }
+      return buscar().then(function(x){
+        SHA=x.sha;
+        var meus=valores(), conflito=[];
+        x.dados.dias.forEach(function(d,i){
+          if(meus[i]==null && d.n!=null){                 // servidor tem, eu não → aceita
+            var el=document.querySelectorAll('input')[i]; if(el) el.value=String(d.n);
+          } else if(meus[i]!=null && d.n!=null && d.n!==meus[i]){
+            conflito.push(DIAS[i].data+': você '+meus[i]+' · servidor '+d.n);
+          }
+        });
+        render();
+        if(conflito.length){ enviando=false;
+          diz('Outra pessoa mudou os mesmos dias — '+conflito.join(' | ')+
+              '. Confira e toque em Reenviar.','erro');
+          document.getElementById('reenviar').style.display='block'; return; }
+        setTimeout(gravar, 600*tentativas);
+      });
+    }
+    if(!r.ok) throw new Error(r.status);
+    return r.json().then(function(j){
+      SHA=j.content.sha; enviando=false; tentativas=0;
+      var agora=valores();
+      var igual = agora.every(function(v,i){ return v===enviado[i]; });
+      document.getElementById('stamp').textContent=corpo.atualizado;
+      try{ localStorage.setItem(K_SERV, JSON.stringify(corpo)); }catch(e){}
+      [].forEach.call(document.querySelectorAll('input.naoenviado'),function(el){el.classList.remove('naoenviado')});
+      document.getElementById('reenviar').style.display='none';
+      if(pedidoPendente || !igual){ diz('Salvando…','salvando'); gravar(); }
+      else { limparRascunho(); diz('Salvo às '+corpo.atualizado+'. Todo mundo que abrir o link vê este número.','ok'); }
+    });
+  }).catch(function(e){ enviando=false; falhou(e && e.message); });
+}
+
+function falhou(msg){
+  var m={'401':'a chave de escrita expirou ou foi revogada','403':'o GitHub recusou (limite ou permissão)',
+         '404':'não encontrei o arquivo no servidor','500':'o GitHub está com problema'}[String(msg)]
+        || ('erro '+(msg||'de rede'));
+  diz('NÃO salvei — '+m+'. O número está guardado neste aparelho; toque em Reenviar quando a conexão voltar.','erro');
+  document.getElementById('reenviar').style.display='block';
+  [].forEach.call(document.querySelectorAll('input'),function(el){ if(el.value!=='') el.classList.add('naoenviado'); });
+}
+
+/* fecha a aba / manda pro fundo → grava na hora, sem esperar o debounce */
+function flush(){
+  if(timer){ clearTimeout(timer); timer=null; if(carregou && GH.token) gravar(true); }
+}
+window.addEventListener('pagehide', flush);
+document.addEventListener('visibilitychange', function(){ if(document.visibilityState==='hidden') flush(); });
+window.addEventListener('online', function(){ if(!carregou) carregar().catch(function(){}); else if(lerRascunho()) pedirSalvar(); });
+
+/* ================= tela ================= */
 function montar(){
   document.getElementById('lista').innerHTML = DIAS.map(function(x,i){
     return '<div class="r'+(x.fim?' fim':'')+'">'+
       '<div class="d">'+x.data+'<em>'+x.sem+'</em></div>'+
-      '<input type="number" min="0" step="1" inputmode="numeric" placeholder="—" data-i="'+i+'"'+
+      '<input type="text" inputmode="numeric" maxlength="5" placeholder="—" data-i="'+i+'"'+
       (x.n!=null?' value="'+x.n+'"':'')+' aria-label="Treinados em '+x.data+'">'+
       '<div class="ac z" data-ac="'+i+'">—</div></div>';
   }).join('');
-  Array.prototype.forEach.call(document.querySelectorAll('input'),function(el){
-    el.addEventListener('input',function(){ render(); agendarSalvar(); });
+  [].forEach.call(document.querySelectorAll('input'),function(el){
+    el.addEventListener('input',function(){
+      var lim=String(el.value==null?'':el.value).replace(/[^0-9]/g,'').slice(0,5);
+      if(el.value!==lim) el.value=lim;
+      render(); agendarSalvar();
+    });
   });
 }
 
-/* ---- salvar ---- */
-function agendarSalvar(){
-  if(!GH.token){ diz('Somente leitura — a chave de escrita ainda não foi configurada.',''); return; }
-  clearTimeout(timer); diz('Salvando…','salvando');
-  timer=setTimeout(salvar,1200);
-}
-
-function salvar(){
-  var ins=[].slice.call(document.querySelectorAll('input'));
-  DIAS.forEach(function(x,i){ var v=ins[i].value; x.n = v===''?null:(parseInt(v,10)||0); });
-  var agora=new Date();
-  var carimbo=agora.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})+' às '+
-              agora.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-  var corpo={meta:META,atualizado:carimbo,dias:DIAS};
-  try{ localStorage.setItem(LS,JSON.stringify(corpo)); }catch(e){}
-
-  var txt=JSON.stringify(corpo,null,2);
-  var b64=btoa(unescape(encodeURIComponent(txt)));
-  fetch('https://api.github.com/repos/'+GH.owner+'/'+GH.repo+'/contents/'+GH.path,{
-    method:'PUT',
-    headers:{'Authorization':'Bearer '+GH.token,'Accept':'application/vnd.github+json','Content-Type':'application/json'},
-    body:JSON.stringify({message:'Treinamento — atualização de '+carimbo,content:b64,sha:SHA,branch:'main'})
-  }).then(function(r){
-    if(r.status===409){ return carregar().then(salvar); }
-    if(!r.ok) throw new Error(r.status);
-    return r.json();
-  }).then(function(j){
-    if(j&&j.content){ SHA=j.content.sha;
-      document.getElementById('stamp').textContent=carimbo;
-      diz('Salvo às '+carimbo+'. Todo mundo que abrir o link vê este número.','ok'); }
-  }).catch(function(e){
-    diz('Não consegui salvar ('+e.message+'). O número ficou guardado neste aparelho — tente de novo.','erro');
-  });
-}
-
-/* ---- render ---- */
 function render(){
-  var acum=0, ultimo=0, algum=false;
-  Array.prototype.forEach.call(document.querySelectorAll('input'),function(el,i){
-    var v=parseInt(el.value,10); if(isNaN(v)||v<0) v=0;
-    if(el.value!==''){ ultimo=i+1; algum=true; }
-    acum+=v;
+  var v=valores(), hoje=idxHoje(), acum=0;
+  v.forEach(function(n,i){
+    acum += (n||0);
     var c=document.querySelector('[data-ac="'+i+'"]');
-    c.textContent = acum>0 ? nf.format(acum) : '—';
-    c.className = 'ac' + (acum>0?'':' z');
+    if(!c) return;
+    var futuro = i>=hoje;
+    c.textContent = (futuro && n==null) ? '' : (acum>0?nf.format(acum):'—');
+    c.className='ac'+(acum>0&&!(futuro&&n==null)?'':' z');
   });
+  if(!carregou){
+    document.getElementById('tot').textContent='—';
+    document.getElementById('pct').textContent='—';
+    document.getElementById('falta').textContent='—';
+    document.getElementById('ritmo').textContent='—';
+    document.getElementById('dlt').textContent='—';
+    return;
+  }
   document.getElementById('tot').textContent=nf.format(acum);
   document.getElementById('fill').style.width=Math.min(100,acum/META*100).toFixed(1)+'%';
-  document.getElementById('pct').textContent=
-    (Math.round(acum/META*1000)/10).toString().replace('.',',')+'% da meta';
+  document.getElementById('pct').textContent=(Math.round(acum/META*1000)/10).toString().replace('.',',')+'% da meta';
+
   var falta=Math.max(0,META-acum), fe=document.getElementById('falta');
   fe.textContent = falta===0?'meta batida':nf.format(falta);
   fe.className='v'+(falta===0?' ok':'');
-  var rest=Math.max(0,DIAS.length-ultimo);
+
+  var uteisRest=0; for(var i=hoje;i<DIAS.length;i++) if(!DIAS[i].fim) uteisRest++;
   document.getElementById('ritmo').textContent =
-    falta===0?'—':(rest>0?nf.format(Math.ceil(falta/rest)):nf.format(falta));
+    falta===0 ? '—' : (uteisRest>0 ? nf.format(Math.ceil(falta/uteisRest)) : nf.format(falta));
+  document.getElementById('ritmol').innerHTML = falta===0?'Meta atingida'
+    : (uteisRest>0? 'Por dia útil<br>nos '+uteisRest+' que faltam' : 'Faltando<br>no último dia');
+
   var de=document.getElementById('dlt'), dl=document.getElementById('dltl');
-  if(!ultimo){ de.textContent='—'; de.className='v'; dl.textContent='Contra o ritmo de referência'; }
-  else { var dif=acum-REF*ultimo;
+  if(hoje===0){ de.textContent='—'; de.className='v'; dl.textContent='O período começa em 19/08'; }
+  else {
+    var esperado=refAte(hoje), dif=acum-esperado;
     de.textContent=(dif>=0?'+':'−')+nf.format(Math.abs(dif));
     de.className='v '+(dif>=0?'ok':'bad');
-    dl.textContent=(dif>=0?'acima':'abaixo')+' da referência no dia '+ultimo; }
-  var b=document.getElementById('send');
+    dl.textContent=(dif>=0?'acima':'abaixo')+' do esperado até '+DIAS[Math.min(hoje,DIAS.length)-1].data;
+  }
+
+  var ultimo=0; v.forEach(function(n,i){ if(n!=null) ultimo=i+1; });
+  var atraso=hoje-ultimo;
+  var av=document.getElementById('atraso');
+  if(atraso>0 && hoje>0){ av.style.display='block';
+    av.textContent='⚠ Sem registro há '+atraso+(atraso===1?' dia':' dias')+' — último preenchido: '+
+      (ultimo?DIAS[ultimo-1].data:'nenhum'); }
+  else av.style.display='none';
+
+  var b=document.getElementById('send'), algum=v.some(function(n){return n!=null});
   b.disabled=!algum;
   b.textContent=algum?('Compartilhar · '+nf.format(acum)+' treinados'):'Preencha ao menos um dia';
 }
 
-document.getElementById('send').addEventListener('click',function(){
-  var linhas=[], acum=0;
-  Array.prototype.forEach.call(document.querySelectorAll('input'),function(el,i){
-    if(el.value!==''){ var v=parseInt(el.value,10)||0; acum+=v; linhas.push(DIAS[i].data+': '+nf.format(v)); }
-  });
-  var txt='*Treinamento Metropolitan*\n\n'+linhas.join('\n')+
-    '\n\n*Acumulado: '+nf.format(acum)+'* de '+nf.format(META)+
-    ' ('+(Math.round(acum/META*1000)/10).toString().replace('.',',')+'%)'+
-    '\n\nhttps://marcellosouzamoreira-design.github.io/treinamento-mm/';
-  window.open('https://wa.me/?text='+encodeURIComponent(txt),'_blank','noopener');
+/* ================= ações ================= */
+document.getElementById('reenviar').addEventListener('click',function(){
+  if(!carregou){ diz('Recarregando…','salvando');
+    carregar().then(function(){ diz('Dados carregados.','ok'); })
+              .catch(function(e){ diz('Ainda sem servidor ('+(e.message||'rede')+'). Tente de novo.','erro'); });
+    return; }
+  diz('Reenviando…','salvando'); tentativas=0; pedirSalvar();
 });
+
+document.getElementById('send').addEventListener('click',function(){
+  var ir=function(){
+    var v=valores(), linhas=[], acum=0;
+    v.forEach(function(n,i){ if(n!=null){ acum+=n; linhas.push(DIAS[i].data+': '+nf.format(n)); } });
+    var txt='*Treinamento Metropolitan*\n\n'+linhas.join('\n')+
+      '\n\n*Acumulado: '+nf.format(acum)+'* de '+nf.format(META)+
+      ' ('+(Math.round(acum/META*1000)/10).toString().replace('.',',')+'%)'+
+      '\n\nhttps://marcellosouzamoreira-design.github.io/treinamento-mm/';
+    window.open('https://wa.me/?text='+encodeURIComponent(txt),'_blank','noopener');
+  };
+  if(timer||enviando||pedidoPendente){ diz('Salvando antes de compartilhar…','salvando');
+    clearTimeout(timer); timer=null; pedirSalvar(); setTimeout(ir,900); }
+  else ir();
+});
+
+/* quem só olha: recarrega sozinho se não há nada por salvar */
+setInterval(function(){
+  if(document.visibilityState!=='visible') return;
+  if(timer||enviando||pedidoPendente||lerRascunho()) return;
+  if(document.activeElement && document.activeElement.tagName==='INPUT') return;
+  buscar().then(function(x){
+    if(x.sha===SHA) return;
+    SHA=x.sha; DIAS=x.dados.dias; META=x.dados.meta||2500; recalcRef();
+    document.getElementById('stamp').textContent=x.dados.atualizado||'—';
+    montar(); render(); diz('Atualizado — outra pessoa registrou números novos.','ok');
+  }).catch(function(){});
+},60000);
+
+/* ================= partida ================= */
+carregar().catch(function(e){
+  var c=lerServidorLocal();
+  if(c){ DIAS=c.dias; META=c.meta||2500; recalcRef(); montar();
+    document.getElementById('stamp').textContent=(c.atualizado||'—')+' (visto neste aparelho)';
+    carregou=false; render();
+    diz('Sem conexão com o servidor. Mostrando o último número visto NESTE APARELHO — pode estar velho.','erro'); }
+  else { diz('Não consegui falar com o servidor ('+(e.message||'rede')+'). Toque em Recarregar.','erro'); render(); }
+  document.getElementById('reenviar').textContent='Recarregar';
+  document.getElementById('reenviar').style.display='block';
+});
+
 </script>
 </body>
 </html>
