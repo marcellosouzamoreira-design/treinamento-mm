@@ -50,6 +50,7 @@ h2{font-family:"Crimson Text",Georgia,serif;font-weight:600;font-size:23px;color
 .reenviar:hover{background:var(--rail)}
 .reenviar:focus-visible{outline:2px solid var(--red);outline-offset:2px}
 input.naoenviado{border-color:var(--red);border-width:2px}
+input.suspeito{border-color:var(--warn,#B4700F);border-width:2px}
 .atraso{margin-top:12px;padding:9px 12px;background:var(--rail);border-left:3px solid var(--red);
  font-size:12.5px;color:var(--ink)}
 .rows{display:flex;flex-direction:column;gap:1px;background:var(--line);border:1px solid var(--line)}
@@ -126,6 +127,7 @@ input::placeholder{color:var(--faint);font-weight:400}
     <div class="s"><div class="v" id="dlt">—</div><div class="l" id="dltl">Contra o ritmo de referência</div></div>
   </div>
   <div id="atraso" class="atraso" style="display:none"></div>
+  <div id="suspeito" class="atraso" style="display:none"></div>
   <div class="stamp">Números oficiais atualizados em <b id="stamp">—</b></div>
 </div>
 
@@ -400,6 +402,17 @@ function render(){
     av.textContent='⚠ Sem registro há '+atraso+(atraso===1?' dia':' dias')+' — último preenchido: '+
       (ultimo?DIAS[ultimo-1].data:'nenhum'); }
   else av.style.display='none';
+
+  /* dígito a mais: avisa sem bloquear */
+  var suspeitos=[];
+  v.forEach(function(n,i){ if(n!=null && n>900) suspeitos.push(DIAS[i].data+' = '+nf.format(n)); });
+  [].forEach.call(document.querySelectorAll('input'),function(el,i){
+    el.classList.toggle('suspeito', v[i]!=null && v[i]>900);
+  });
+  var sus=document.getElementById('suspeito');
+  if(suspeitos.length){ sus.style.display='block';
+    sus.textContent='⚠ Confira: '+suspeitos.join(' · ')+' — mais de 900 num único dia. Se estiver certo, ignore.'; }
+  else sus.style.display='none';
 
   var b=document.getElementById('send'), algum=v.some(function(n){return n!=null});
   b.disabled=!algum;
