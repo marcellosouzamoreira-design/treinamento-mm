@@ -46,9 +46,11 @@ h2{font-family:"Crimson Text",Georgia,serif;font-weight:600;font-size:23px;color
 .hd{background:var(--navy);color:#fff;padding:9px 14px}
 .hd span{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;font-weight:600}
 .hd span+span{text-align:right}
+.hd i{font-style:normal}.sm{display:none}
 .r.fim{background:var(--ground)}
 .d{font-weight:600;font-size:15px}.d em{font-style:normal;font-weight:400;color:var(--faint);font-size:12.5px;margin-left:7px}
-input{width:100%;padding:9px 10px;text-align:right;font:inherit;font-weight:600;
+input{width:100%;min-height:48px;padding:9px 12px;text-align:right;font-size:16px;
+ font-family:inherit;font-weight:600;
  font-variant-numeric:tabular-nums;color:var(--ink);background:var(--ground);
  border:1px solid var(--line);border-radius:2px;-moz-appearance:textfield}
 input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
@@ -59,14 +61,34 @@ input::placeholder{color:var(--faint);font-weight:400}
 .send{display:block;width:100%;margin-top:18px;padding:15px;border:0;border-radius:2px;
  background:var(--navy);color:#fff;font:600 15px Inter,sans-serif;cursor:pointer;
  letter-spacing:.02em;transition:opacity .2s}
-.send:hover{opacity:.9}.send:focus-visible{outline:2px solid var(--red);outline-offset:2px}
+.send:hover{opacity:.9}
+.spacer{display:none}.send:focus-visible{outline:2px solid var(--red);outline-offset:2px}
 .send[disabled]{background:var(--rail);color:var(--faint);cursor:default}
 .ft{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);font-size:13px;
  color:var(--mute);line-height:1.6}
 .ft b{color:var(--ink);font-weight:600}
 .stamp{margin-top:12px;font-size:12.5px;color:var(--faint)}
 .stamp b{color:var(--navy2)}
-@media(max-width:520px){h1{font-size:29px}.ct b{font-size:46px}
+@media(max-width:560px){
+ body{padding:0 12px 96px}
+ h1{font-size:27px} .sb{font-size:14.5px}
+ header{padding:22px 0 16px}
+ .hero{padding:16px 14px;margin-bottom:20px}
+ .ct b{font-size:44px} .ct .of{font-size:17px} .ct span{font-size:14px}
+ .st{grid-template-columns:1fr 1fr;margin-top:16px}
+ .st .s:last-child{grid-column:1/-1}
+ .s{padding:11px 12px} .s .v{font-size:19px} .s .l{font-size:10px;letter-spacing:.06em}
+ .hd,.r{grid-template-columns:1fr 96px 70px;gap:8px;padding:8px 10px}
+ .hd{padding:8px 10px} .hd span{font-size:9.5px;letter-spacing:.05em}
+ .lo{display:none} .sm{display:inline}
+ .d{font-size:14.5px} .d em{margin-left:5px;font-size:11.5px}
+ .ac{font-size:13.5px}
+ .send{position:fixed;left:12px;right:12px;bottom:12px;width:auto;z-index:9;
+  padding:16px;font-size:16px;box-shadow:0 6px 20px rgba(0,0,0,.28)}
+ .spacer{display:block;height:8px}
+ h2{font-size:21px} .hint{font-size:13px}
+ .ft{font-size:12.5px}
+}
  .hd,.r{grid-template-columns:1fr 84px 64px;gap:8px;padding:10px 12px}
  .st{grid-template-columns:1fr 1fr}.st .s:last-child{grid-column:1/-1}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
@@ -100,11 +122,12 @@ pronto. Não precisa de conta nem de senha.<br>
 depois que a mensagem for enviada.</p>
 
 <div class="rows">
-  <div class="hd"><span>Dia</span><span>Treinados</span><span>Acumulado</span></div>
+  <div class="hd"><span>Dia</span><span>Treinados</span><span><i class="lo">Acumulado</i><i class="sm">Acum.</i></span></div>
   <div id="lista"></div>
 </div>
 <button class="send" id="send" disabled>Preencha ao menos um dia</button>
 
+<div class="spacer"></div>
 <div class="ft">
   <b>Ritmo de referência:</b> 2.500 em 10 dias = 250 por dia. Sábado e domingo entram
   na contagem mas não carregam meta.<br>
