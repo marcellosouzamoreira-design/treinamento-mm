@@ -1,21 +1,21 @@
 {
   "meta": 2500,
-  "atualizado": "21/08 às 18:40",
+  "atualizado": "",
   "dias": [
     {
       "data": "19/08",
       "sem": "quarta",
-      "n": 240
+      "n": null
     },
     {
       "data": "20/08",
       "sem": "quinta",
-      "n": 310
+      "n": null
     },
     {
       "data": "21/08",
       "sem": "sexta",
-      "n": 180
+      "n": null
     },
     {
       "data": "22/08",
