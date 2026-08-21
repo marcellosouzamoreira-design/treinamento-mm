@@ -40,6 +40,11 @@ h1{font-family:"Crimson Text",Georgia,serif;font-weight:600;font-size:36px;line-
 .s .l{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--mute);margin-top:5px;line-height:1.3}
 h2{font-family:"Crimson Text",Georgia,serif;font-weight:600;font-size:23px;color:var(--navy);margin:0 0 4px}
 .hint{font-size:13.5px;color:var(--mute);margin:0 0 16px;max-width:58ch}
+.estado{font-size:13px;padding:9px 12px;margin:0 0 14px;border-left:3px solid var(--faint);
+ background:var(--surf);color:var(--mute)}
+.estado.ok{border-color:var(--good);color:var(--good)}
+.estado.salvando{border-color:var(--navy2);color:var(--navy2)}
+.estado.erro{border-color:var(--red);color:var(--red)}
 .rows{display:flex;flex-direction:column;gap:1px;background:var(--line);border:1px solid var(--line)}
 .hd,.r{display:grid;grid-template-columns:1fr 92px 76px;gap:10px;align-items:center;
  background:var(--surf);padding:11px 14px}
@@ -119,10 +124,9 @@ input::placeholder{color:var(--faint);font-weight:400}
 </div>
 
 <h2>Registro diário</h2>
+<div id="estado" class="estado">Carregando…</div>
 <p class="hint">Preencha os dias e toque em <b>enviar</b> — abre o WhatsApp com o resumo
-pronto. Não precisa de conta nem de senha.<br>
-<b>Atenção:</b> o que você digita aqui não fica salvo na página. O registro só vale
-depois que a mensagem for enviada.</p>
+pronto. Não precisa de conta nem de senha.</p>
 
 <div class="rows">
   <div class="hd"><span>Dia</span><span>Treinados</span><span><i class="lo">Acumulado</i><i class="sm">Acum.</i></span></div>
@@ -140,15 +144,44 @@ depois que a mensagem for enviada.</p>
 </div>
 
 <script>
-var META=2500, REF=250, nf=new Intl.NumberFormat('pt-BR'), DIAS=[], oficiais={};
+/* ---- configuração ---- */
+var GH = { owner:"marcellosouzamoreira-design", repo:"treinamento-mm", path:"dados.json", token:"" };
+var LS = "treinamento-mm-v1";
 
-fetch('dados.json?v='+Date.now()).then(function(r){return r.json()}).then(function(d){
-  DIAS=d.dias; META=d.meta||2500;
-  document.getElementById('stamp').textContent=d.atualizado||'ainda não preenchido';
-  montar(); render();
-}).catch(function(){ document.getElementById('lista').innerHTML=
-  '<div class="r"><div class="d">Não consegui carregar os dados. Recarregue a página.</div><div></div><div></div></div>'; });
+var META=2500, REF=250, nf=new Intl.NumberFormat('pt-BR'), DIAS=[], SHA=null, timer=null;
+var est=document.getElementById('estado');
+function diz(t,c){ est.textContent=t; est.className='estado'+(c?' '+c:''); }
 
+/* ---- carregar ---- */
+function carregar(){
+  var u='https://api.github.com/repos/'+GH.owner+'/'+GH.repo+'/contents/'+GH.path;
+  var h={'Accept':'application/vnd.github+json'};
+  if(GH.token) h.Authorization='Bearer '+GH.token;
+  return fetch(u+'?ref=main&t='+Date.now(),{headers:h,cache:'no-store'})
+    .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
+    .then(function(j){
+      SHA=j.sha;
+      var d=JSON.parse(decodeURIComponent(escape(atob(j.content.replace(/\n/g,'')))));
+      DIAS=d.dias; META=d.meta||2500;
+      document.getElementById('stamp').textContent=d.atualizado||'ainda não preenchido';
+      montar(); render();
+      diz(GH.token ? 'Salva sozinho. Todo mundo que abrir o link vê o mesmo número.'
+                   : 'Somente leitura — a chave de escrita ainda não foi configurada.',
+          GH.token?'ok':'');
+    });
+}
+
+function localSalvo(){ try{ return JSON.parse(localStorage.getItem(LS)||'null'); }catch(e){ return null; } }
+
+carregar().catch(function(){
+  var c=localSalvo();
+  if(c){ DIAS=c.dias; META=c.meta||2500;
+    document.getElementById('stamp').textContent=c.atualizado||'—';
+    montar(); render(); diz('Sem conexão com o servidor — mostrando o último estado deste aparelho.','erro'); }
+  else diz('Não consegui carregar os dados. Recarregue a página.','erro');
+});
+
+/* ---- montar ---- */
 function montar(){
   document.getElementById('lista').innerHTML = DIAS.map(function(x,i){
     return '<div class="r'+(x.fim?' fim':'')+'">'+
@@ -158,10 +191,46 @@ function montar(){
       '<div class="ac z" data-ac="'+i+'">—</div></div>';
   }).join('');
   Array.prototype.forEach.call(document.querySelectorAll('input'),function(el){
-    el.addEventListener('input',render);
+    el.addEventListener('input',function(){ render(); agendarSalvar(); });
   });
 }
 
+/* ---- salvar ---- */
+function agendarSalvar(){
+  if(!GH.token){ diz('Somente leitura — a chave de escrita ainda não foi configurada.',''); return; }
+  clearTimeout(timer); diz('Salvando…','salvando');
+  timer=setTimeout(salvar,1200);
+}
+
+function salvar(){
+  var ins=[].slice.call(document.querySelectorAll('input'));
+  DIAS.forEach(function(x,i){ var v=ins[i].value; x.n = v===''?null:(parseInt(v,10)||0); });
+  var agora=new Date();
+  var carimbo=agora.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})+' às '+
+              agora.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  var corpo={meta:META,atualizado:carimbo,dias:DIAS};
+  try{ localStorage.setItem(LS,JSON.stringify(corpo)); }catch(e){}
+
+  var txt=JSON.stringify(corpo,null,2);
+  var b64=btoa(unescape(encodeURIComponent(txt)));
+  fetch('https://api.github.com/repos/'+GH.owner+'/'+GH.repo+'/contents/'+GH.path,{
+    method:'PUT',
+    headers:{'Authorization':'Bearer '+GH.token,'Accept':'application/vnd.github+json','Content-Type':'application/json'},
+    body:JSON.stringify({message:'Treinamento — atualização de '+carimbo,content:b64,sha:SHA,branch:'main'})
+  }).then(function(r){
+    if(r.status===409){ return carregar().then(salvar); }
+    if(!r.ok) throw new Error(r.status);
+    return r.json();
+  }).then(function(j){
+    if(j&&j.content){ SHA=j.content.sha;
+      document.getElementById('stamp').textContent=carimbo;
+      diz('Salvo às '+carimbo+'. Todo mundo que abrir o link vê este número.','ok'); }
+  }).catch(function(e){
+    diz('Não consegui salvar ('+e.message+'). O número ficou guardado neste aparelho — tente de novo.','erro');
+  });
+}
+
+/* ---- render ---- */
 function render(){
   var acum=0, ultimo=0, algum=false;
   Array.prototype.forEach.call(document.querySelectorAll('input'),function(el,i){
@@ -190,18 +259,18 @@ function render(){
     dl.textContent=(dif>=0?'acima':'abaixo')+' da referência no dia '+ultimo; }
   var b=document.getElementById('send');
   b.disabled=!algum;
-  b.textContent=algum?('Enviar atualização · '+nf.format(acum)+' treinados'):'Preencha ao menos um dia';
+  b.textContent=algum?('Compartilhar · '+nf.format(acum)+' treinados'):'Preencha ao menos um dia';
 }
 
 document.getElementById('send').addEventListener('click',function(){
   var linhas=[], acum=0;
   Array.prototype.forEach.call(document.querySelectorAll('input'),function(el,i){
-    if(el.value!==''){ var v=parseInt(el.value,10)||0; acum+=v;
-      linhas.push(DIAS[i].data+': '+nf.format(v)); }
+    if(el.value!==''){ var v=parseInt(el.value,10)||0; acum+=v; linhas.push(DIAS[i].data+': '+nf.format(v)); }
   });
-  var txt='*Treinamento Metropolitan — atualização*\n\n'+linhas.join('\n')+
+  var txt='*Treinamento Metropolitan*\n\n'+linhas.join('\n')+
     '\n\n*Acumulado: '+nf.format(acum)+'* de '+nf.format(META)+
-    ' ('+(Math.round(acum/META*1000)/10).toString().replace('.',',')+'%)';
+    ' ('+(Math.round(acum/META*1000)/10).toString().replace('.',',')+'%)'+
+    '\n\nhttps://marcellosouzamoreira-design.github.io/treinamento-mm/';
   window.open('https://wa.me/?text='+encodeURIComponent(txt),'_blank','noopener');
 });
 </script>
